@@ -37,5 +37,4 @@
 - [流水的NLP铁打的NER：命名实体识别实践与探索](https://zhuanlan.zhihu.com/p/166496466)
 - [Named entity recognition | NLP-progress](https://nlpprogress.com/english/named_entity_recognition.html)
 - [pytorch-crf](https://github.com/kmkurn/pytorch-crf)
-- []()
 

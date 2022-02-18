@@ -18,6 +18,11 @@ __registered_metrics = {
         'precision':precision_score,
         'accuracy':accuracy_score,
         'roc_auc_score':roc_auc_score
+    },
+    'multiclass':{
+        'weighted_f1':partial(f1_score,average='weighted'),
+        'micro_f1':partial(f1_score,average='micro'),
+        'marco_f1':partial(f1_score,average='macro')
     }
 }
 

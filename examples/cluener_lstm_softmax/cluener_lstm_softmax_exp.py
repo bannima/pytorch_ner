@@ -18,7 +18,7 @@ from transformers.models.bert import BertModel,BertTokenizer
 
 
 def cluener_lstm_softmax_exp(hypers):
-    label_type = 'bioes' # must in [bio,bioes]
+    label_type = 'bioes' # label type to preprocess cluener dataset, must in [bio,bioes]
     result_path = os.path.join(os.path.dirname(__file__),'results')
 
     # 1.load cluener dataset
@@ -32,13 +32,14 @@ def cluener_lstm_softmax_exp(hypers):
     trainer = Trainer(
         model = lstm_softmax,
         dataloaders = (cluener_loader.train_loader,cluener_loader.valid_loader,cluener_loader.test_loader),
+        data_converter=cluener_loader.data_converter,
         result_path = result_path,
-        hypers = hypers,
-        data_converter = cluener_loader.data_converter
+        hypers = hypers
     )
     trainer.fit()
 
     # 4.analysis experiment results
+
 
 if __name__ == '__main__':
     hypers = parse_parmas()

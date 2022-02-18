@@ -31,7 +31,7 @@ class LSTMSoftamx(nn.Module):
         self.output_size = output_size
         self.embedding = nn.Embedding(vocab_size,hidden_size)
         self.predict_logits = predict_logits
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(p=dropout)
         if word_vectors is not None:
             self.embedding.weight = nn.Parameter(word_vectors,requires_grad=fine_tuned)
 
@@ -62,7 +62,7 @@ class LSTMSoftamx(nn.Module):
         # to compact weights again call flatten paramters
         output, (final_hidden_state, final_cell_state) = self.lstm(lstm_input, (hidden, cell))
         output,length = pad_packed_sequence(output) # output = S x B x E
-        logits = nn.Dropout(output.view(-1,self.hidden_size*(int(self.bidirectional)+1)))
+        logits = self.dropout(output.view(-1,self.hidden_size*(int(self.bidirectional)+1)))
         logits = self.fc(logits) #double hidden size when bilstm
         logits = logits.view(-1,batch_size,self.output_size).transpose(0,1) # S x B x L -> B x S x L, L means output label size
 

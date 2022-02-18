@@ -181,7 +181,6 @@ class CLUENERDataloader(BaseLoader):
         seq_tensor = seq_tensor[perm_idx]
 
         # also sort label in the same order
-        #labels = torch.LongTensor(labels)[perm_idx]
         labels = list(np.array(labels)[perm_idx])
 
         return (seq_tensor,seq_lengths),labels

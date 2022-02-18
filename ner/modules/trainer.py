@@ -11,6 +11,7 @@
 import os
 import random
 import time
+from ner.modules.utils import flatten
 
 import numpy as np
 import pandas as pd
@@ -137,7 +138,7 @@ class Trainer():
             # measure how long the validation run took
             valid_time = format_time(time.time() - t0)
 
-            epoch_test_loss, test_metrics = self.test(epoch, save_preds=self.hypers.get("save_test_preds", False))
+            epoch_test_loss, test_metrics = self.test(epoch, save_preds=self.hypers.save_test_preds)
             logger.info("# Test loss for epoch {} is {} ".format(epoch, epoch_test_loss))
 
             for metric_name in test_metrics:
@@ -224,7 +225,7 @@ class Trainer():
         return total_train_loss
 
     def _forward_pass_with_no_grad(self, epoch, loader, metrics, save_preds=False, type='Val'):
-        '''forward pass with no gradients'''
+        ''' forward pass with no gradients, for validation and test. '''
         epoch_loss = 0
         predict_label = []
         target_label = []
@@ -246,18 +247,13 @@ class Trainer():
                 loss = self.calc_loss(outputs, labels,seq_lengths)
                 epoch_loss += loss.item()
 
-                y_pred, label_ids = self.calc_predicts(outputs, labels)
+                #transform output logits to final NER type predictions, truncate with seq lengths
+                y_pred, label_ids = self.transform_predicts(outputs, labels, seq_lengths)
 
+                predict_label += y_pred
+                target_label += label_ids
 
-
-                predict_label.append(y_pred)
-                target_label.append(label_ids)
-
-        # transform results to list for save and metrics calculation
-        predict_label = self.transform_result(predict_label)
-        target_label = self.transform_result(target_label)
-
-        eval_metrics = self.calc_metrics(predict_label, target_label, metrics,group_ids)
+        eval_metrics = self.calc_metrics(predict_label, target_label, metrics, group_ids)
 
         self.report_metrics(eval_metrics)
 
@@ -267,31 +263,34 @@ class Trainer():
 
         return epoch_loss, eval_metrics
 
-    def calc_metrics(self, predict_labels, target_labels, metrics,group_ids=None):
+    def calc_metrics(self, predict_labels, target_labels, metrics, group_ids=None):
         ''' calc metrics for single task, can be override '''
 
+        #flatten nested preds and labels to list
+        predict_labels,target_labels = list(flatten(predict_labels)),list(flatten(target_labels))
         eval_metrics = {}
         for metric_name, metric in metrics.items():
             eval_metrics[metric_name] = metric(target_labels, predict_labels)
         return eval_metrics
-
-    def transform_result(self, result, seq_lengths):
-        result = [np.argmax(batch_pred,axis=-1) for batch_pred in result]
-        return
 
     def report_metrics(self, metrics_results):
         ''' report the eval and test metrics '''
         for metric in metrics_results:
             logger.info("{}: {}".format(metric, metrics_results[metric]))
 
-    def calc_predicts(self, outputs, labels):
-        ''' single task prediction calculation, can be override'''
+    def transform_predicts(self, outputs, labels, seq_lengths):
+        ''' transform the predicts logits to final prediction format, which depends on the task type.
+        current for NER, can be override'''
+
         # move logits and labels to GPU
         logits = outputs.detach().cpu().numpy()
         label_ids = labels.to("cpu") if isinstance(labels,torch.Tensor) else labels
-        #y_pred = np.argmax(logits, axis=1).flatten()
-        y_pred = np.int64(logits>0.5).squeeze() #默认为二分类问题，大于0.5则为1，否则为0
-        return y_pred, label_ids
+        y_pred = np.argmax(logits, axis=-1)
+
+        #truncate the output labels with seq lengths
+        y_pred = [list(seq_pred[:seq_length]) for (seq_length,seq_pred) in zip(seq_lengths.tolist(),y_pred)]
+
+        return y_pred,label_ids
 
     def calc_loss(self, outputs, labels,seq_lengths):
         '''single task loss calculation, can be override'''
@@ -316,8 +315,8 @@ class Trainer():
 
     @property
     def exp_result_dir(self):
-        unique_dir = 'Model_LR{}_Batch{}_Loss{}'.format( \
-            self.hypers.lr, self.hypers.batch_size, self.criterion)
+        unique_dir = 'Exp_LR{}_Batch{}_Loss{}'.format( \
+            self.hypers.lr, self.hypers.batch_size, self.hypers.criterion)
         exp_result_dir = os.path.join(self.result_path, unique_dir)
         if not os.path.exists(exp_result_dir):
             os.mkdir(exp_result_dir)

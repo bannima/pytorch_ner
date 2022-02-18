@@ -15,25 +15,11 @@ def parse_parmas():
     parser.add_argument('--lr', type=float, required=False, default=2e-3)
     parser.add_argument('--epoch', type=int, required=False, default=10)
     parser.add_argument('--criterion', type=str, required=False, default='SeqWiseCrossEntropyLoss')
-    parser.add_argument('--metrics', type=str, required=False, default='classification')
+    parser.add_argument('--metrics', type=str, required=False, default='multiclass')
     parser.add_argument('--save_model', type=bool, required=False, default=True)
     parser.add_argument('--save_test_preds', type=bool, required=False, default=True)
     parser.add_argument('--save_val_preds', type=bool, required=False, default=True)
-
-    args = parser.parse_args()
-    # HYPERS = {
-    #     'LearningRate': args.lr,
-    #     'Epochs': args.epoch,
-    #     'Batch': args.batchsize,
-    #     'Criterion': args.criterion,
-    #     'Metrics': args.metrics,
-    #     'Save_Model': args.save_model,
-    #     'save_test_preds': args.save_test_preds
-    # }
-    #
-    # return HYPERS
-    return args
-
+    return parser.parse_args()
 
 def format_time(elapsed):
     elapsed_rounded = int(round((elapsed)))
