@@ -168,24 +168,35 @@ class CLUENERDataloader(BaseLoader):
         """
         # vectorize the char sequence
         inputs = [[self.word2idx[char] for char in list(x)] for x in inputs]
-
+        #fill vairable length input tensors with zero
         seq_lengths = torch.LongTensor([len(text) for text in inputs])
+        #note that inputs are encoded from 1, 0 means OOV(out-of-vocabulary)
         seq_tensor = torch.zeros((len(inputs), seq_lengths.max())).long()
-        for idx, (seq, seq_len) in enumerate(zip(inputs, seq_lengths)):
-            seq_tensor[idx, :seq_len] = torch.LongTensor(seq)
+        for idx, (seq_input, seq_len) in enumerate(zip(inputs, seq_lengths)):
+            seq_tensor[idx, :seq_len] = torch.LongTensor(seq_input)
+
+        #input 0 is illegal
+        mask = seq_tensor>0
 
         # sort tensors by their length
-        seq_lengths, perm_idx = seq_lengths.sort(0, descending=True)
+        sorted_seq_lengths, perm_idx = seq_lengths.sort(0, descending=True)
         seq_tensor = seq_tensor[perm_idx]
 
         # inference has not labels
         if labels is not None:
             # vectorize the label
             labels = [[self.label2idx[l] for l in label.split('|')] for label in labels]
-            # also sort label in the same order
-            labels = list(np.array(labels)[perm_idx])
 
-        return (seq_tensor,seq_lengths),labels
+            #fill vairable length labels with -1, note that -1 are meaningless in cluener label
+            label_tensor = torch.zeros_like(seq_tensor)-1
+            for idx, (seq_label, seq_len) in enumerate(zip(labels, seq_lengths)):
+                label_tensor[idx, :seq_len] = torch.LongTensor(seq_label)
+
+            # also sort label in the same order
+            label_tensor = label_tensor[perm_idx]
+            return (seq_tensor,sorted_seq_lengths),label_tensor
+
+        return (seq_tensor,sorted_seq_lengths),None
 
     def vector_to_raw(self,labels):
         return ['|'.join([self.idx2label[l] for l in label]) for label in labels]

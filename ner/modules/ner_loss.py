@@ -23,7 +23,6 @@ class SeqWiseCrossEntropyLoss():
             loss += self.crossentropy(input[:seq_length,],torch.tensor(label[:seq_length],dtype=torch.long))
         return loss
 
-
 __registered_loss = {
     'SeqWiseCrossEntropyLoss':{
         'cls':SeqWiseCrossEntropyLoss,

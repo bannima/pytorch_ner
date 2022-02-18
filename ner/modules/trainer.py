@@ -11,8 +11,6 @@
 import os
 import random
 import time
-from ner.modules.utils import flatten
-
 import numpy as np
 import pandas as pd
 import torch
@@ -24,7 +22,7 @@ from ner.modules.ner_loss import create_loss
 from ner.modules.eval_metrics import create_metrics
 from ner.config import logger
 from ner.modules.utils import format_time, current_time, save_to_json
-
+from ner.modules.utils import flatten
 
 class Trainer():
     '''
@@ -201,15 +199,15 @@ class Trainer():
 
             # convert the raw input and label to numerical format
             if self.raw_to_vector is not None:
-                (inputs, seq_lengths), labels = self.raw_to_vector(raw_input, raw_label)
+                (inputs_tensor, mask), labels_tensors = self.raw_to_vector(raw_input, raw_label)
 
             # move numerical tensor to GPU
-            inputs = self.tensor_to_device(inputs)
-            #labels = self.tensor_to_device(labels)
+            inputs_tensor = self.tensor_to_device(inputs_tensor)
+            labels_tensors = self.tensor_to_device(labels_tensors)
 
-            outputs = self.model(inputs,seq_lengths)
+            outputs = self.model(inputs_tensor, mask, labels_tensors)
 
-            batch_loss = self.calc_loss(outputs, labels,seq_lengths)
+            batch_loss = self.calc_loss(outputs, labels_tensors, mask)
 
             # perform a backward pass to calculate the gradients
             batch_loss.backward()
@@ -227,7 +225,7 @@ class Trainer():
 
         return total_train_loss
 
-    def _forward_pass_with_no_grad(self, epoch, loader, metrics, save_preds=False, type='Val'):
+    def _forward_pass_with_no_grad(self, epoch, loader, metrics, save_preds=False, type='Val',is_inference=False):
         ''' forward pass with no gradients, for validation and test. '''
         epoch_loss = 0
         raw_inputs = []
@@ -252,13 +250,13 @@ class Trainer():
             # no gradients
             with torch.no_grad():
                 # forward pass
-                outputs = self.model(inputs, seq_lengths)
+                outputs = self.model(inputs, seq_lengths, labels)
 
                 #transform output logits to final NER type predictions, truncate with seq lengths
                 y_pred, label_ids = self.transform_predicts(outputs, labels, seq_lengths)
 
-                if labels is not None:
-                    loss = self.calc_loss(outputs, labels,seq_lengths)
+                if not is_inference:
+                    loss = self.calc_loss(outputs, labels, seq_lengths)
                     epoch_loss += loss.item()
                     target_label += label_ids
 
@@ -266,14 +264,14 @@ class Trainer():
                 raw_inputs += raw_input
 
         #inference has no target labels
-        if len(target_label)>0:
+        if not is_inference:
             eval_metrics = self.calc_metrics(predict_label, target_label, metrics, group_ids)
 
         #self.report_metrics(eval_metrics)
 
         if save_preds:
             # save predicts and true labels, convert to raw label if exists self.vector_to_raw
-            if len(target_label)>0:
+            if not is_inference:
                 data = pd.DataFrame(
                     {
                         'text':raw_inputs,
@@ -315,14 +313,21 @@ class Trainer():
         # move logits and labels to GPU
         logits = outputs.detach().cpu().numpy()
         y_pred = np.argmax(logits, axis=-1)
-        # truncate the output labels with seq lengths
+
+        # truncate the predict labels with seq lengths
         y_pred = [list(seq_pred[:seq_length]) for (seq_length, seq_pred) in zip(seq_lengths.tolist(), y_pred)]
 
         #labels can be None, for inference case
-        if labels and isinstance(labels,torch.Tensor):
-            labels.to('cpu')
+        if labels is not None:
+            if isinstance(labels,torch.Tensor):
+                labels.to('cpu')
 
-        return y_pred,labels
+            # truncate the true labels with seq lengths
+            labels = [list(seq_label[:seq_length]) for (seq_length, seq_label) in zip(seq_lengths.tolist(), labels.tolist())]
+
+            return y_pred,labels
+
+        return y_pred,None
 
     def calc_loss(self, outputs, labels,seq_lengths):
         '''single task loss calculation, can be override'''
@@ -342,7 +347,8 @@ class Trainer():
         ''' test process '''
         logger.info(" Test epoch {}".format(epoch))
         epoch_test_loss, test_metrics = self._forward_pass_with_no_grad(epoch, self.test_loader, self.metrics,
-                                                                        save_preds=save_preds, type='Test')
+                                                                        save_preds=save_preds, type='Test',
+                                                                        is_inference=True)
         return epoch_test_loss, test_metrics
 
     @property

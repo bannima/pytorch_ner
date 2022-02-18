@@ -46,17 +46,16 @@ class LSTMSoftamx(nn.Module):
                              batch_size,self.hidden_size)
         return hidden
 
-    def forward(self,seq_tensor,seq_lengths):
+    def forward(self,seq_tensor,seq_lengths,labels):
         #seq_tensor,seq_lengths = input # seq_tensor = B x S
         seq_tensor = seq_tensor.t() # seq_tensor = S x B
         batch_size = seq_tensor.size(1)
 
         hidden = self._init_hidden(batch_size)
         cell = self._init_hidden(batch_size)
-        try:
-            embedd = self.embedding(seq_tensor) #  S x B x E
-        except:
-            print("rase")
+
+        embedd = self.embedding(seq_tensor) #  S x B x E
+
         # pack them up nicely
         lstm_input = pack_padded_sequence(
             embedd, seq_lengths.data.cpu().numpy()

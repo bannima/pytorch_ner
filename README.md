@@ -1,11 +1,18 @@
 ## pytorch_ner
 `classic NER model implementations based on Pytorch`
 
+
+### First Experiment
+```angular2html
+#fit the lstm_softmax with cluener dataset
+>>> python examples/cluener_lstm_softmax/cluener_lstmsoftmax_exp.py
+```
+
 ### Models
 
 - [IDCNN]()
 
-- [LSTM + Softmax]()
+- [LSTM + Softmax](https://github.com/bannima/pytorch_ner/tree/master/ner/models/lstm_softmax)
 
 - [LSTM + CRF]()
 
