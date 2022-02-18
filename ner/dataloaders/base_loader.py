@@ -29,8 +29,12 @@ class BaseLoader(metaclass=ABCMeta):
     def test_loader(self):
         raise NotImplementedError()
 
-    def data_converter(self, inputs):
-        ''' do nothing '''
+    def raw_to_vector(self, inputs, **kwargs):
+        ''' convert the raw input and label to numerical vector'''
+        return inputs
+
+    def vector_to_raw(self, inputs, **kwargs):
+        ''' convert the numerical vector to raw input and label '''
         return inputs
 
     @property

@@ -36,7 +36,8 @@ class Trainer():
                  dataloaders,
                  result_path,
                  hypers,
-                 data_converter=None,
+                 raw_to_vector=None,
+                 vector_to_raw=None,
                  **kwargs):
         super(Trainer).__init__()
 
@@ -46,7 +47,8 @@ class Trainer():
         self.criterion = create_loss(hypers.criterion)
         self.metrics = create_metrics(hypers.metrics)
         self.train_loader, self.valid_loader, self.test_loader = dataloaders
-        self.data_converter = data_converter
+        self.raw_to_vector = raw_to_vector
+        self.vector_to_raw = vector_to_raw
 
         if not os.path.exists(result_path):
             raise ValueError("result path not exists: {}".format(result_path))
@@ -141,8 +143,10 @@ class Trainer():
             epoch_test_loss, test_metrics = self.test(epoch, save_preds=self.hypers.save_test_preds)
             logger.info("# Test loss for epoch {} is {} ".format(epoch, epoch_test_loss))
 
-            for metric_name in test_metrics:
-                logger.info(" # Test {} score for epoch {} is {}".format(metric_name, epoch, test_metrics[metric_name]))
+            #can be none
+            if test_metrics:
+                for metric_name in test_metrics:
+                    logger.info(" # Test {} score for epoch {} is {}".format(metric_name, epoch, test_metrics[metric_name]))
 
             # record all statistics in this epoch
             epoch_stats.append(
@@ -164,13 +168,12 @@ class Trainer():
             if self.hypers.save_model:
                 self.save_model(epoch)
 
-        epoch_stats_file = self.save_epoch_statistics(epoch_stats)
+        self.epoch_stats_file = self.save_epoch_statistics(epoch_stats)
         logger.info(
             "# Training complete; Total Train Procedure took: {}".format(str(format_time(time.time() - total_t0))))
         logger.info(
-            "# Epoch Statistics saved at {}".format(epoch_stats_file)
+            "# Epoch Statistics saved at {}".format(self.epoch_stats_file)
         )
-        return epoch_stats_file
 
     def tensor_to_device(self,tensors):
         if torch.cuda.is_available():
@@ -194,11 +197,11 @@ class Trainer():
             # clear any previously calculated gradients before performing a backward pass
             self.model.zero_grad()
 
-            # move batch data to device
-            inputs, labels = batch
+            raw_input, raw_label = batch
 
-            #convert the raw input and label to numerical format
-            (inputs,seq_lengths),labels = self.data_converter(inputs,labels)
+            # convert the raw input and label to numerical format
+            if self.raw_to_vector is not None:
+                (inputs, seq_lengths), labels = self.raw_to_vector(raw_input, raw_label)
 
             # move numerical tensor to GPU
             inputs = self.tensor_to_device(inputs)
@@ -227,14 +230,21 @@ class Trainer():
     def _forward_pass_with_no_grad(self, epoch, loader, metrics, save_preds=False, type='Val'):
         ''' forward pass with no gradients, for validation and test. '''
         epoch_loss = 0
+        raw_inputs = []
         predict_label = []
         target_label = []
         group_ids = []
+        eval_metrics = None
         for batch in tqdm(loader, desc='{} for epoch {}'.format(type, epoch), unit="batch"):
-            inputs, labels = batch
+
+            if len(batch)==2:
+                raw_input, raw_label = batch
+            else:
+                raw_input = batch; raw_label=None
 
             # convert the raw input and label to numerical format
-            (inputs, seq_lengths), labels = self.data_converter(inputs, labels)
+            if self.raw_to_vector is not None:
+                (inputs, seq_lengths), labels = self.raw_to_vector(raw_input, raw_label)
 
             # move numerical tensor to GPU
             inputs = self.tensor_to_device(inputs)
@@ -244,22 +254,42 @@ class Trainer():
                 # forward pass
                 outputs = self.model(inputs, seq_lengths)
 
-                loss = self.calc_loss(outputs, labels,seq_lengths)
-                epoch_loss += loss.item()
-
                 #transform output logits to final NER type predictions, truncate with seq lengths
                 y_pred, label_ids = self.transform_predicts(outputs, labels, seq_lengths)
 
+                if labels is not None:
+                    loss = self.calc_loss(outputs, labels,seq_lengths)
+                    epoch_loss += loss.item()
+                    target_label += label_ids
+
                 predict_label += y_pred
-                target_label += label_ids
+                raw_inputs += raw_input
 
-        eval_metrics = self.calc_metrics(predict_label, target_label, metrics, group_ids)
+        #inference has no target labels
+        if len(target_label)>0:
+            eval_metrics = self.calc_metrics(predict_label, target_label, metrics, group_ids)
 
-        self.report_metrics(eval_metrics)
+        #self.report_metrics(eval_metrics)
 
         if save_preds:
-            # save predicts and true labels
-            self.save_predictions(epoch, predict_label, target_label)
+            # save predicts and true labels, convert to raw label if exists self.vector_to_raw
+            if len(target_label)>0:
+                data = pd.DataFrame(
+                    {
+                        'text':raw_inputs,
+                        'predict': self.vector_to_raw(predict_label) if self.vector_to_raw is not None else predict_label,
+                        'labels': self.vector_to_raw(target_label) if self.vector_to_raw is not None else target_label
+                    }
+                )
+            else:
+                data = pd.DataFrame(
+                    {
+                        'text': raw_inputs,
+                        'predict': self.vector_to_raw(
+                            predict_label) if self.vector_to_raw is not None else predict_label
+                    }
+                )
+            self.save_predictions(epoch, data, type)
 
         return epoch_loss, eval_metrics
 
@@ -284,13 +314,15 @@ class Trainer():
 
         # move logits and labels to GPU
         logits = outputs.detach().cpu().numpy()
-        label_ids = labels.to("cpu") if isinstance(labels,torch.Tensor) else labels
         y_pred = np.argmax(logits, axis=-1)
+        # truncate the output labels with seq lengths
+        y_pred = [list(seq_pred[:seq_length]) for (seq_length, seq_pred) in zip(seq_lengths.tolist(), y_pred)]
 
-        #truncate the output labels with seq lengths
-        y_pred = [list(seq_pred[:seq_length]) for (seq_length,seq_pred) in zip(seq_lengths.tolist(),y_pred)]
+        #labels can be None, for inference case
+        if labels and isinstance(labels,torch.Tensor):
+            labels.to('cpu')
 
-        return y_pred,label_ids
+        return y_pred,labels
 
     def calc_loss(self, outputs, labels,seq_lengths):
         '''single task loss calculation, can be override'''
@@ -328,18 +360,13 @@ class Trainer():
         torch.save(self.model, model_filepath)
         logger.info("Model {} saved at {}".format(model_filename, self.exp_result_dir))
 
-    def save_predictions(self, epoch, predicts, labels):
+    def save_predictions(self, epoch, data,type):
         prediction_path = os.path.join(self.exp_result_dir, 'predicts')
         if not os.path.exists(prediction_path):
             os.mkdir(prediction_path)
-        pred_filename = "Model_Epoch{}_Predictions.json".format(epoch)
+        pred_filename = "Model_Epoch{}_{}_Predictions.json".format(epoch,type)
         pred_filepath = os.path.join(prediction_path, pred_filename)
-        data = pd.DataFrame(
-            {
-                'predict': predicts,
-                'labels': labels
-            }
-        )
+
         save_to_json(data.to_dict(orient='records'), pred_filepath)
         logger.info("Prediction {} saved at {}".format(pred_filename, self.exp_result_dir))
 

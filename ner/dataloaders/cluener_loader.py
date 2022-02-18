@@ -62,7 +62,7 @@ def build_vocab(dataset):
         vocab_counter += Counter(list(text))
     word2idx = {word:idx+1 for idx,word in enumerate(vocab_counter.keys())} #note that idx start from 1, 0 should be defined as OOV(out of vocabulary)
     idx2word = {idx:word for word,idx in word2idx.items()}
-    return len(vocab_counter),word2idx,idx2word
+    return len(vocab_counter)+1,word2idx,idx2word #note that the vocab size should add 1,because the word2idx starts from 1
 
 class CLUENERDataset(Dataset):
     def __init__(self,dataset):
@@ -158,7 +158,7 @@ class CLUENERDataloader(BaseLoader):
             )
         return self._valid_loader
 
-    def data_converter(self,inputs,labels):
+    def raw_to_vector(self,inputs,labels):
         """ convert the raw text into idx list and transform to torch tensor.
             note that the variable length of text sequence should be filled with zero
             and sort by the sequence length.
@@ -166,8 +166,6 @@ class CLUENERDataloader(BaseLoader):
             vectorize the raw label and transform to torch tensor,
             permute the label sequence order by the text perm order.
         """
-        # vectorize the label
-        labels = [[self.label2idx[l] for l in label.split('|')] for label in labels]
         # vectorize the char sequence
         inputs = [[self.word2idx[char] for char in list(x)] for x in inputs]
 
@@ -180,10 +178,17 @@ class CLUENERDataloader(BaseLoader):
         seq_lengths, perm_idx = seq_lengths.sort(0, descending=True)
         seq_tensor = seq_tensor[perm_idx]
 
-        # also sort label in the same order
-        labels = list(np.array(labels)[perm_idx])
+        # inference has not labels
+        if labels is not None:
+            # vectorize the label
+            labels = [[self.label2idx[l] for l in label.split('|')] for label in labels]
+            # also sort label in the same order
+            labels = list(np.array(labels)[perm_idx])
 
         return (seq_tensor,seq_lengths),labels
+
+    def vector_to_raw(self,labels):
+        return ['|'.join([self.idx2label[l] for l in label]) for label in labels]
 
 
 

@@ -29,9 +29,10 @@ class LSTMSoftamx(nn.Module):
         self.bidirectional = bidirectional
         self.num_lstm_layers = num_lstm_layers
         self.output_size = output_size
-        self.embedding = nn.Embedding(vocab_size,hidden_size)
         self.predict_logits = predict_logits
         self.dropout = nn.Dropout(p=dropout)
+
+        self.embedding = nn.Embedding(vocab_size,hidden_size)
         if word_vectors is not None:
             self.embedding.weight = nn.Parameter(word_vectors,requires_grad=fine_tuned)
 
@@ -52,8 +53,10 @@ class LSTMSoftamx(nn.Module):
 
         hidden = self._init_hidden(batch_size)
         cell = self._init_hidden(batch_size)
-        embedd = self.embedding(seq_tensor) #  S x B x E
-
+        try:
+            embedd = self.embedding(seq_tensor) #  S x B x E
+        except:
+            print("rase")
         # pack them up nicely
         lstm_input = pack_padded_sequence(
             embedd, seq_lengths.data.cpu().numpy()

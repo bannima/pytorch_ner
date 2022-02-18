@@ -9,13 +9,11 @@
 @desc: 
 """
 import os.path
-
 from ner.dataloaders import create_dataloader
 from ner.models import create_ner_model
 from ner.modules.utils import parse_parmas
 from ner.modules.trainer import Trainer
-from transformers.models.bert import BertModel,BertTokenizer
-
+from ner.modules.analyzer import SingleTaskExpAnalyzer
 
 def cluener_lstm_softmax_exp(hypers):
     label_type = 'bioes' # label type to preprocess cluener dataset, must in [bio,bioes]
@@ -32,14 +30,17 @@ def cluener_lstm_softmax_exp(hypers):
     trainer = Trainer(
         model = lstm_softmax,
         dataloaders = (cluener_loader.train_loader,cluener_loader.valid_loader,cluener_loader.test_loader),
-        data_converter=cluener_loader.data_converter,
+        raw_to_vector=cluener_loader.raw_to_vector,
+        vector_to_raw=cluener_loader.vector_to_raw,
         result_path = result_path,
         hypers = hypers
     )
     trainer.fit()
 
     # 4.analysis experiment results
-
+    cur_dir = os.path.dirname(__file__)
+    analyzer = SingleTaskExpAnalyzer(os.path.join(cur_dir,trainer.epoch_stats_file))
+    analyzer.analysis_experiment(exp_result_dir=trainer.exp_result_dir,title="Cluener_LstmSoftmax_Experiment")
 
 if __name__ == '__main__':
     hypers = parse_parmas()
