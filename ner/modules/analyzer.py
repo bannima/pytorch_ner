@@ -40,9 +40,9 @@ class SingleTaskExpAnalyzer(ExperimentAnalyzer):
 
     def analysis_experiment(self, exp_result_dir, title):
         # load experiment statistics
-        evals, eval_metric_names = self.analysis_task_metric(self.statistics['Test Metrics'].apply(eval))
+        evals, eval_metric_names = self.analysis_task_metric(self.statistics['Eval Metrics'].apply(eval))
 
-        loss = (self.statistics['Train Loss'], self.statistics['Valid Loss'], self.statistics['Test Loss'])
+        loss = (self.statistics['Train Loss'], self.statistics['Valid Loss'])
         loss_metric_names = ("Train Loss", 'Valid Loss', 'Test Loss')
 
         draw_twin_lines_chart(title=title, \
