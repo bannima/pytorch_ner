@@ -89,7 +89,7 @@ class Trainer():
             logger.info("Using CPU ... ")
             self.device = torch.device('cpu')
 
-    def fit(self):
+    def fit(self,output_loss=False):
         '''
         run epochs for train-valid-test procedure, and report statistics
         :return:
@@ -118,7 +118,7 @@ class Trainer():
             # put the model into training mode
             self.model.train()
 
-            epoch_train_loss = self.train(epoch)
+            epoch_train_loss = self.train(epoch,output_loss)
             logger.info(" # Train loss for epoch:{} is {} ".format(epoch, epoch_train_loss))
 
             # mesure how long this epoch took
@@ -128,7 +128,7 @@ class Trainer():
             # eval mode
             self.model.eval()
 
-            epoch_eval_loss, eval_metrics = self.valid(epoch, save_preds=self.hypers.save_val_preds)
+            epoch_eval_loss, eval_metrics = self.valid(epoch,output_loss, save_preds=self.hypers.save_val_preds)
 
             logger.info("# Valid loss for epoch {} is {} ".format(epoch, epoch_eval_loss))
             for metric_name in eval_metrics:
@@ -138,7 +138,7 @@ class Trainer():
             # measure how long the validation run took
             valid_time = format_time(time.time() - t0)
 
-            epoch_test_loss, test_metrics = self.test(epoch, save_preds=self.hypers.save_test_preds)
+            epoch_test_loss, test_metrics = self.test(epoch,output_loss, save_preds=self.hypers.save_test_preds)
             logger.info("# Test loss for epoch {} is {} ".format(epoch, epoch_test_loss))
 
             #can be none
@@ -185,7 +185,7 @@ class Trainer():
                 }
         return tensors
 
-    def train(self, epoch):
+    def train(self, epoch, output_loss):
         ''' train process '''
         total_train_loss = 0
         num_batchs = 0
@@ -199,15 +199,18 @@ class Trainer():
 
             # convert the raw input and label to numerical format
             if self.raw_to_vector is not None:
-                (inputs_tensor, mask), labels_tensors = self.raw_to_vector(raw_input, raw_label)
+                (inputs_tensors,seq_lengths),labels_tensors = self.raw_to_vector(raw_input, raw_label)
 
             # move numerical tensor to GPU
-            inputs_tensor = self.tensor_to_device(inputs_tensor)
+            inputs_tensors = self.tensor_to_device(inputs_tensors)
             labels_tensors = self.tensor_to_device(labels_tensors)
 
-            outputs = self.model(inputs_tensor, mask, labels_tensors)
+            if not output_loss:
+                outputs = self.model(inputs_tensors, seq_lengths, labels_tensors)
 
-            batch_loss = self.calc_loss(outputs, labels_tensors, mask)
+                batch_loss = self.calc_loss(outputs, labels_tensors, seq_lengths)
+            else:
+                batch_loss,batch_preds = self.model(inputs_tensors, seq_lengths, labels_tensors)
 
             # perform a backward pass to calculate the gradients
             batch_loss.backward()
@@ -225,7 +228,7 @@ class Trainer():
 
         return total_train_loss
 
-    def _forward_pass_with_no_grad(self, epoch, loader, metrics, save_preds=False, type='Val',is_inference=False):
+    def _forward_pass_with_no_grad(self, epoch, output_loss, loader, metrics, save_preds=False, type='Val',is_inference=False):
         ''' forward pass with no gradients, for validation and test. '''
         epoch_loss = 0
         raw_inputs = []
@@ -240,25 +243,36 @@ class Trainer():
             else:
                 raw_input = batch; raw_label=None
 
+            # # convert the raw input and label to numerical format
+            # if self.raw_to_vector is not None:
+            #     (inputs, seq_lengths), labels = self.raw_to_vector(raw_input, raw_label)
+
             # convert the raw input and label to numerical format
             if self.raw_to_vector is not None:
-                (inputs, seq_lengths), labels = self.raw_to_vector(raw_input, raw_label)
+                (inputs_tensors, seq_lengths), labels_tensors = self.raw_to_vector(raw_input, raw_label)
 
             # move numerical tensor to GPU
-            inputs = self.tensor_to_device(inputs)
+            inputs_tensors = self.tensor_to_device(inputs_tensors)
 
             # no gradients
             with torch.no_grad():
                 # forward pass
-                outputs = self.model(inputs, seq_lengths, labels)
 
-                #transform output logits to final NER type predictions, truncate with seq lengths
-                y_pred, label_ids = self.transform_predicts(outputs, labels, seq_lengths)
+                if not output_loss:
+                    outputs = self.model(inputs_tensors, seq_lengths, labels_tensors)
+                    loss = self.calc_loss(outputs, labels_tensors, seq_lengths)
+
+                    # transform output logits to final NER type predictions, truncate with seq lengths
+                    y_pred, labels_tensors = self.transform_predicts(outputs, labels_tensors, seq_lengths)
+
+                else:
+                    loss, y_pred = self.model(inputs_tensors, seq_lengths, labels_tensors)
+                    if isinstance(labels_tensors, torch.Tensor):
+                        labels_tensors.to('cpu')
 
                 if not is_inference:
-                    loss = self.calc_loss(outputs, labels, seq_lengths)
                     epoch_loss += loss.item()
-                    target_label += label_ids
+                    target_label += labels_tensors
 
                 predict_label += y_pred
                 raw_inputs += raw_input
@@ -336,17 +350,17 @@ class Trainer():
         batch_loss = self.criterion(outputs, labels, seq_lengths)
         return batch_loss
 
-    def valid(self, epoch, save_preds=False):
+    def valid(self, epoch, output_loss=False,save_preds=False):
         ''' valid process '''
         logger.info(" Eval epoch {}".format(epoch))
-        epoch_val_loss, val_metrics = self._forward_pass_with_no_grad(epoch, self.valid_loader, self.metrics,
+        epoch_val_loss, val_metrics = self._forward_pass_with_no_grad(epoch, output_loss,self.valid_loader, self.metrics,
                                                                       save_preds=save_preds, type='Val')
         return epoch_val_loss, val_metrics
 
-    def test(self, epoch, save_preds=False):
+    def test(self, epoch, output_loss=False,save_preds=False):
         ''' test process '''
         logger.info(" Test epoch {}".format(epoch))
-        epoch_test_loss, test_metrics = self._forward_pass_with_no_grad(epoch, self.test_loader, self.metrics,
+        epoch_test_loss, test_metrics = self._forward_pass_with_no_grad(epoch, output_loss, self.test_loader, self.metrics,
                                                                         save_preds=save_preds, type='Test',
                                                                         is_inference=True)
         return epoch_test_loss, test_metrics

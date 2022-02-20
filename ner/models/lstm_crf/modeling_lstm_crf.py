@@ -60,16 +60,22 @@ class LSTMCRF(nn.Module):
         # to compact weights again call flatten paramters
         output, (final_hidden_state, final_cell_state) = self.lstm(lstm_input, (hidden, cell))
         output, length = pad_packed_sequence(output)  # output = S x B x E
+
         logits = self.dropout(output.view(-1, self.hidden_size * (int(self.bidirectional) + 1)))
 
         logits = self.fc(logits) # double hidden size when bilstm
 
-        logits = logits.view(-1, batch_size, self.output_size).transpose(0,1)  # S x B x L -> B x S x L, L means output label size
+        logits = logits.view(-1, batch_size, self.output_size)  # S x B x L, L means output label size
 
-        if self.predict_logits:
-            return logits  # B x S x L
-        return torch.argmax(logits, dim=-1)  # final predicts, B x S x L -> B x S, B=32,S=50,L=35
+        labels = labels.transpose(0, 1) #labels: BxS -> SxB
 
+        #note that labels less than 0 are meaningless label
+        mask = torch.where(labels>=0,1,0).type(torch.uint8)
+
+        loss = self.crf(logits,labels,mask)
+        predictions = self.crf.decode(logits,mask)
+
+        return loss,predictions
 
 
 

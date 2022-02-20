@@ -176,7 +176,7 @@ class CLUENERDataloader(BaseLoader):
             seq_tensor[idx, :seq_len] = torch.LongTensor(seq_input)
 
         #input 0 is illegal
-        mask = seq_tensor>0
+        mask = seq_tensor > 0
 
         # sort tensors by their length
         sorted_seq_lengths, perm_idx = seq_lengths.sort(0, descending=True)
@@ -188,7 +188,7 @@ class CLUENERDataloader(BaseLoader):
             labels = [[self.label2idx[l] for l in label.split('|')] for label in labels]
 
             #fill vairable length labels with -1, note that -1 are meaningless in cluener label
-            label_tensor = torch.zeros_like(seq_tensor)-1
+            label_tensor = torch.full(seq_tensor.shape,-1)
             for idx, (seq_label, seq_len) in enumerate(zip(labels, seq_lengths)):
                 label_tensor[idx, :seq_len] = torch.LongTensor(seq_label)
 
