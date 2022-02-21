@@ -89,7 +89,7 @@ class Trainer():
             logger.info("Using CPU ... ")
             self.device = torch.device('cpu')
 
-    def fit(self,output_loss=False):
+    def fit(self):
         '''
         run epochs for train-valid-test procedure, and report statistics
         :return:
@@ -118,7 +118,7 @@ class Trainer():
             # put the model into training mode
             self.model.train()
 
-            epoch_train_loss = self.train(epoch,output_loss)
+            epoch_train_loss = self.train(epoch)
             logger.info(" # Train loss for epoch:{} is {} ".format(epoch, epoch_train_loss))
 
             # mesure how long this epoch took
@@ -128,7 +128,7 @@ class Trainer():
             # eval mode
             self.model.eval()
 
-            epoch_eval_loss, eval_metrics = self.valid(epoch,output_loss, save_preds=self.hypers.save_val_preds)
+            epoch_eval_loss, eval_metrics = self.valid(epoch, save_preds=self.hypers.save_val_preds)
 
             logger.info("# Valid loss for epoch {} is {} ".format(epoch, epoch_eval_loss))
             for metric_name in eval_metrics:
@@ -138,7 +138,7 @@ class Trainer():
             # measure how long the validation run took
             valid_time = format_time(time.time() - t0)
 
-            epoch_test_loss, test_metrics = self.test(epoch,output_loss, save_preds=self.hypers.save_test_preds)
+            epoch_test_loss, test_metrics = self.test(epoch, save_preds=self.hypers.save_test_preds)
             logger.info("# Test loss for epoch {} is {} ".format(epoch, epoch_test_loss))
 
             #can be none
@@ -185,7 +185,7 @@ class Trainer():
                 }
         return tensors
 
-    def train(self, epoch, output_loss):
+    def train(self, epoch):
         ''' train process '''
         total_train_loss = 0
         num_batchs = 0
@@ -205,7 +205,7 @@ class Trainer():
             inputs_tensors = self.tensor_to_device(inputs_tensors)
             labels_tensors = self.tensor_to_device(labels_tensors)
 
-            if not output_loss:
+            if not self.model.output_loss:
                 outputs = self.model(inputs_tensors, seq_lengths, labels_tensors)
 
                 batch_loss = self.calc_loss(outputs, labels_tensors, seq_lengths)
@@ -228,12 +228,12 @@ class Trainer():
 
         return total_train_loss
 
-    def _forward_pass_with_no_grad(self, epoch, output_loss, loader, metrics, save_preds=False, type='Val',is_inference=False):
+    def _forward_pass_with_no_grad(self, epoch, loader, metrics, save_preds=False, type='Val',is_inference=False):
         ''' forward pass with no gradients, for validation and test. '''
         epoch_loss = 0
         raw_inputs = []
-        predict_label = []
-        target_label = []
+        predict_labels = []
+        target_labels = []
         group_ids = []
         eval_metrics = None
         for batch in tqdm(loader, desc='{} for epoch {}'.format(type, epoch), unit="batch"):
@@ -258,28 +258,38 @@ class Trainer():
             with torch.no_grad():
                 # forward pass
 
-                if not output_loss:
+                if not self.model.output_loss:
                     outputs = self.model(inputs_tensors, seq_lengths, labels_tensors)
                     loss = self.calc_loss(outputs, labels_tensors, seq_lengths)
 
                     # transform output logits to final NER type predictions, truncate with seq lengths
-                    y_pred, labels_tensors = self.transform_predicts(outputs, labels_tensors, seq_lengths)
+                    y_pred, target_label = self.transform_predicts(outputs, labels_tensors, seq_lengths)
 
-                else:
-                    loss, y_pred = self.model(inputs_tensors, seq_lengths, labels_tensors)
+                else: #crf predicts loss directly
+                    if is_inference: #crf test only predicts labels
+                        y_pred = self.model(inputs_tensors, seq_lengths, labels_tensors,is_inference)
+                    else:
+                        loss, y_pred = self.model(inputs_tensors, seq_lengths, labels_tensors)
+
                     if isinstance(labels_tensors, torch.Tensor):
                         labels_tensors.to('cpu')
 
                 if not is_inference:
-                    epoch_loss += loss.item()
-                    target_label += labels_tensors
+                    try:
+                        epoch_loss += loss.item()
+                    except:
+                        pass
+                    # truncate the true labels with seq lengths
+                    target_label = [list(seq_label[:seq_length]) for (seq_length, seq_label) in
+                              zip(seq_lengths.tolist(), labels_tensors.tolist())]
+                    target_labels += target_label
 
-                predict_label += y_pred
+                predict_labels += y_pred
                 raw_inputs += raw_input
 
         #inference has no target labels
         if not is_inference:
-            eval_metrics = self.calc_metrics(predict_label, target_label, metrics, group_ids)
+            eval_metrics = self.calc_metrics(predict_labels, target_labels, metrics, group_ids)
 
         #self.report_metrics(eval_metrics)
 
@@ -289,16 +299,15 @@ class Trainer():
                 data = pd.DataFrame(
                     {
                         'text':raw_inputs,
-                        'predict': self.vector_to_raw(predict_label) if self.vector_to_raw is not None else predict_label,
-                        'labels': self.vector_to_raw(target_label) if self.vector_to_raw is not None else target_label
+                        'predict': self.vector_to_raw(predict_labels) if self.vector_to_raw is not None else predict_labels,
+                        'labels': self.vector_to_raw(target_labels) if self.vector_to_raw is not None else target_labels
                     }
                 )
             else:
                 data = pd.DataFrame(
                     {
                         'text': raw_inputs,
-                        'predict': self.vector_to_raw(
-                            predict_label) if self.vector_to_raw is not None else predict_label
+                        'predict': self.vector_to_raw(predict_labels) if self.vector_to_raw is not None else predict_labels
                     }
                 )
             self.save_predictions(epoch, data, type)
@@ -350,17 +359,17 @@ class Trainer():
         batch_loss = self.criterion(outputs, labels, seq_lengths)
         return batch_loss
 
-    def valid(self, epoch, output_loss=False,save_preds=False):
+    def valid(self, epoch,save_preds=False):
         ''' valid process '''
         logger.info(" Eval epoch {}".format(epoch))
-        epoch_val_loss, val_metrics = self._forward_pass_with_no_grad(epoch, output_loss,self.valid_loader, self.metrics,
+        epoch_val_loss, val_metrics = self._forward_pass_with_no_grad(epoch, self.valid_loader, self.metrics,
                                                                       save_preds=save_preds, type='Val')
         return epoch_val_loss, val_metrics
 
-    def test(self, epoch, output_loss=False,save_preds=False):
+    def test(self, epoch,save_preds=False):
         ''' test process '''
         logger.info(" Test epoch {}".format(epoch))
-        epoch_test_loss, test_metrics = self._forward_pass_with_no_grad(epoch, output_loss, self.test_loader, self.metrics,
+        epoch_test_loss, test_metrics = self._forward_pass_with_no_grad(epoch, self.test_loader, self.metrics,
                                                                         save_preds=save_preds, type='Test',
                                                                         is_inference=True)
         return epoch_test_loss, test_metrics

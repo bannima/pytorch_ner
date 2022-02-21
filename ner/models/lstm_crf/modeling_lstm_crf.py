@@ -17,7 +17,7 @@ from torchcrf import CRF
 class LSTMCRF(nn.Module):
     ''' Implementation of LSTM + CRF '''
 
-    def __init__(self,vocab_size,output_size,word_vectors=None,fine_tuned=True,hidden_size=100,num_lstm_layers=1,bidirectional=True,predict_logits=True,dropout=0.1):
+    def __init__(self,vocab_size,output_size,word_vectors=None,fine_tuned=True,hidden_size=100,num_lstm_layers=1,bidirectional=True,predict_logits=True,dropout=0.1,output_loss=True):
         super(LSTMCRF, self).__init__()
         self.hidden_size = hidden_size
         self.bidirectional = bidirectional
@@ -25,6 +25,9 @@ class LSTMCRF(nn.Module):
         self.output_size = output_size
         self.predict_logits = predict_logits
         self.dropout = nn.Dropout(p=dropout)
+
+        # for lstm_crf, model output loss
+        self.output_loss = output_loss
 
         self.embedding = nn.Embedding(vocab_size, hidden_size)
         if word_vectors is not None:
@@ -43,7 +46,7 @@ class LSTMCRF(nn.Module):
                              batch_size, self.hidden_size)
         return hidden
 
-    def forward(self,seq_tensor,seq_lengths,labels):
+    def forward(self,seq_tensor,seq_lengths,labels,is_inference=False):
         # seq_tensor,seq_lengths = input # seq_tensor = B x S
         seq_tensor = seq_tensor.t()  # seq_tensor = S x B
         batch_size = seq_tensor.size(1)
@@ -67,15 +70,25 @@ class LSTMCRF(nn.Module):
 
         logits = logits.view(-1, batch_size, self.output_size)  # S x B x L, L means output label size
 
-        labels = labels.transpose(0, 1) #labels: BxS -> SxB
 
-        #note that labels less than 0 are meaningless label
-        mask = torch.where(labels>=0,1,0).type(torch.uint8)
+        # # note that labels less than 0 are meaningless label
+        # mask = torch.where(labels >= 0, 1, 0).type(torch.uint8)
 
-        loss = self.crf(logits,labels,mask)
-        predictions = self.crf.decode(logits,mask)
+        # note that seq tensor index less and equal than 0 are meaningless word idx
+        mask = torch.where(seq_tensor>0,1,0).type(torch.uint8)
 
-        return loss,predictions
+        #train should calc loss
+        if not is_inference:
+            labels = labels.transpose(0, 1)  # labels: BxS -> SxB
+
+            log_likelihood = self.crf(logits,labels,mask) #crf output the log likelihood
+            loss = -1 * log_likelihood
+            predictions = self.crf.decode(logits,mask)
+            return loss, predictions
+        else:
+            predictions = self.crf.decode(logits,mask)
+            return predictions
+
 
 
 

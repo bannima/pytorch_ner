@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_packed_sequence,pack_padded_sequence
 
 class LSTMSoftamx(nn.Module):
-    def __init__(self,vocab_size,output_size,word_vectors=None,fine_tuned=True,hidden_size=100,num_lstm_layers=1,bidirectional=True,predict_logits=True,dropout=0.1):
+    def __init__(self,vocab_size,output_size,word_vectors=None,fine_tuned=True,hidden_size=100,num_lstm_layers=1,bidirectional=True,predict_logits=True,dropout=0.1,output_loss=False):
         '''
         :param vocab_size: vocab size for given dataset,using for embedding
         :param output_size: output size for ner label
@@ -31,6 +31,9 @@ class LSTMSoftamx(nn.Module):
         self.output_size = output_size
         self.predict_logits = predict_logits
         self.dropout = nn.Dropout(p=dropout)
+
+        # for lstm_softmax, model output predictions
+        self.output_loss = output_loss
 
         self.embedding = nn.Embedding(vocab_size,hidden_size)
         if word_vectors is not None:

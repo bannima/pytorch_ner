@@ -35,7 +35,7 @@ def cluener_lstm_crf_exp(hypers):
         result_path = result_path,
         hypers = hypers
     )
-    trainer.fit(output_loss=True)
+    trainer.fit()
 
     # 4.analysis experiment results
     cur_dir = os.path.dirname(__file__)
@@ -44,6 +44,7 @@ def cluener_lstm_crf_exp(hypers):
 
 if __name__ == '__main__':
     hypers = parse_parmas()
+    hypers.lr = 0.01
     cluener_lstm_crf_exp(hypers)
 
 
