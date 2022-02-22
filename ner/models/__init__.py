@@ -10,6 +10,7 @@
 """
 from ner.models.lstm_crf.modeling_lstm_crf import LSTMCRF
 from ner.models.lstm_softmax.modeling_lstm_softmax import LSTMSoftamx
+from ner.models.bert_softmax.modeling_bert_softmax import BERTSoftmax
 
 __registerd_models = {
     'LSTMSoftmax':{
@@ -19,9 +20,14 @@ __registerd_models = {
     'LSTMCRF': {
         'cls': LSTMCRF,
         'intro': "LSTM+CRF",
+    },
+    'BERTSoftmax':{
+        'cls':BERTSoftmax,
+        'intro':"Bert+Softmax"
     }
 }
 
 def create_ner_model(ner_model,*args,**kwargs):
-    assert ner_model in __registerd_models
+    if ner_model not in __registerd_models:
+        raise ValueError("{} not in registered models, must in {}".format(ner_model,list(__registerd_models.keys())))
     return __registerd_models[ner_model]['cls'](*args,**kwargs)

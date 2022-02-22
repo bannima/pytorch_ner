@@ -24,6 +24,16 @@ from ner.config import logger
 from ner.modules.utils import format_time, current_time, save_to_json
 from ner.modules.utils import flatten
 
+
+def nested_list_with_seqlens(lists,seq_lengths):
+    '''transform 1-D list to nested sequence length wise list'''
+    nested_lists = []
+    start = 0
+    for seq_len in seq_lengths:
+        nested_lists.append(lists[start:start + seq_len])
+        start += seq_len
+    return nested_lists
+
 class Trainer():
     '''
     unified train procedure implementation, for single task
@@ -198,19 +208,22 @@ class Trainer():
             raw_input, raw_label = batch
 
             # convert the raw input and label to numerical format
-            if self.raw_to_vector is not None:
-                (inputs_tensors,seq_lengths),labels_tensors = self.raw_to_vector(raw_input, raw_label)
+            inputs_tensors,labels_tensors = self.raw_to_vector(raw_input, raw_label)
+
+            # by default, the 1st place of input_tensor is mask
+            mask = inputs_tensors[1]
 
             # move numerical tensor to GPU
             inputs_tensors = self.tensor_to_device(inputs_tensors)
             labels_tensors = self.tensor_to_device(labels_tensors)
 
             if not self.model.output_loss:
-                outputs = self.model(inputs_tensors, seq_lengths, labels_tensors)
+                outputs = self.model(inputs_tensors, labels_tensors)
+                batch_loss = self.calc_loss(outputs, labels_tensors,mask)
 
-                batch_loss = self.calc_loss(outputs, labels_tensors, seq_lengths)
+            #crf predict loss directly
             else:
-                batch_loss,batch_preds = self.model(inputs_tensors, seq_lengths, labels_tensors)
+                batch_loss,batch_preds = self.model(inputs_tensors, labels_tensors)
 
             # perform a backward pass to calculate the gradients
             batch_loss.backward()
@@ -243,46 +256,40 @@ class Trainer():
             else:
                 raw_input = batch; raw_label=None
 
-            # # convert the raw input and label to numerical format
-            # if self.raw_to_vector is not None:
-            #     (inputs, seq_lengths), labels = self.raw_to_vector(raw_input, raw_label)
-
             # convert the raw input and label to numerical format
-            if self.raw_to_vector is not None:
-                (inputs_tensors, seq_lengths), labels_tensors = self.raw_to_vector(raw_input, raw_label)
+            inputs_tensors, labels_tensors = self.raw_to_vector(raw_input, raw_label)
 
             # move numerical tensor to GPU
             inputs_tensors = self.tensor_to_device(inputs_tensors)
+            labels_tensors = self.tensor_to_device(labels_tensors)
+
+            # By defination, the 1'st place of input tensor is mask
+            mask = inputs_tensors[1]
 
             # no gradients
             with torch.no_grad():
                 # forward pass
-
                 if not self.model.output_loss:
-                    outputs = self.model(inputs_tensors, seq_lengths, labels_tensors)
-                    loss = self.calc_loss(outputs, labels_tensors, seq_lengths)
+
+                    outputs = self.model(inputs_tensors, labels_tensors)
+                    # inference just predicts
+                    if not is_inference:
+                        loss = self.calc_loss(outputs, labels_tensors,mask)
 
                     # transform output logits to final NER type predictions, truncate with seq lengths
-                    y_pred, target_label = self.transform_predicts(outputs, labels_tensors, seq_lengths)
+                    y_pred, target_label = self.transform_predicts(outputs, labels_tensors, mask)
 
                 else: #crf predicts loss directly
                     if is_inference: #crf test only predicts labels
-                        y_pred = self.model(inputs_tensors, seq_lengths, labels_tensors,is_inference)
+                        y_pred = self.model(inputs_tensors,labels_tensors,is_inference)
                     else:
-                        loss, y_pred = self.model(inputs_tensors, seq_lengths, labels_tensors)
+                        loss, y_pred = self.model(inputs_tensors, labels_tensors)
 
-                    if isinstance(labels_tensors, torch.Tensor):
-                        labels_tensors.to('cpu')
-
-                if not is_inference:
-                    try:
-                        epoch_loss += loss.item()
-                    except:
-                        pass
-                    # truncate the true labels with seq lengths
-                    target_label = [list(seq_label[:seq_length]) for (seq_length, seq_label) in
-                              zip(seq_lengths.tolist(), labels_tensors.tolist())]
+                try:
                     target_labels += target_label
+                    epoch_loss += loss.item()
+                except:
+                    pass
 
                 predict_labels += y_pred
                 raw_inputs += raw_input
@@ -290,8 +297,6 @@ class Trainer():
         #inference has no target labels
         if not is_inference:
             eval_metrics = self.calc_metrics(predict_labels, target_labels, metrics, group_ids)
-
-        #self.report_metrics(eval_metrics)
 
         if save_preds:
             # save predicts and true labels, convert to raw label if exists self.vector_to_raw
@@ -329,16 +334,19 @@ class Trainer():
         for metric in metrics_results:
             logger.info("{}: {}".format(metric, metrics_results[metric]))
 
-    def transform_predicts(self, outputs, labels, seq_lengths):
+    def transform_predicts(self, outputs, labels ,mask):
         ''' transform the predicts logits to final prediction format, which depends on the task type.
         current for NER, can be override'''
 
+        seq_lengths = torch.sum(mask,dim=1)
+
         # move logits and labels to GPU
         logits = outputs.detach().cpu().numpy()
-        y_pred = np.argmax(logits, axis=-1)
-
-        # truncate the predict labels with seq lengths
-        y_pred = [list(seq_pred[:seq_length]) for (seq_length, seq_pred) in zip(seq_lengths.tolist(), y_pred)]
+        y_pred = torch.Tensor(np.argmax(logits, axis=-1))
+        # truncate the predict labels with seq lengths,
+        y_pred = torch.masked_select(y_pred,mask).type(torch.int).tolist() # masked_select return 1-D tensor
+        #transform to example-wise predit labels
+        y_pred = nested_list_with_seqlens(y_pred,seq_lengths)
 
         #labels can be None, for inference case
         if labels is not None:
@@ -346,16 +354,18 @@ class Trainer():
                 labels.to('cpu')
 
             # truncate the true labels with seq lengths
-            labels = [list(seq_label[:seq_length]) for (seq_length, seq_label) in zip(seq_lengths.tolist(), labels.tolist())]
-
+            labels = torch.masked_select(labels,mask).tolist()
+            labels = nested_list_with_seqlens(labels,seq_lengths)
             return y_pred,labels
 
         return y_pred,None
 
-    def calc_loss(self, outputs, labels,seq_lengths):
+    def calc_loss(self, outputs, labels,mask):
         '''single task loss calculation, can be override'''
         # labels = labels.view(-1,1) #tranform [batch_size] to [batch_size X 1]
         # labels = labels.to(torch.float32)
+        #mask = torch.where(labels>=0,1,0)
+        seq_lengths = torch.sum(mask,dim=1)
         batch_loss = self.criterion(outputs, labels, seq_lengths)
         return batch_loss
 

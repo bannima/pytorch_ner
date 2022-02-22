@@ -49,10 +49,14 @@ class LSTMSoftamx(nn.Module):
                              batch_size,self.hidden_size)
         return hidden
 
-    def forward(self,seq_tensor,seq_lengths,labels):
-        #seq_tensor,seq_lengths = input # seq_tensor = B x S
+    def forward(self,inputs, labels):
+        seq_tensor,mask = inputs # seq_tensor = B x S
         seq_tensor = seq_tensor.t() # seq_tensor = S x B
         batch_size = seq_tensor.size(1)
+
+        #get seq_lengths from mask
+        seq_lengths = torch.sum(mask,dim=1)
+        seq_lengths = seq_lengths.t()
 
         hidden = self._init_hidden(batch_size)
         cell = self._init_hidden(batch_size)

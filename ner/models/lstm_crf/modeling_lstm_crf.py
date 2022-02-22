@@ -57,7 +57,7 @@ class LSTMCRF(nn.Module):
 
         # pack them up nicely
         lstm_input = pack_padded_sequence(
-            embedd, seq_lengths.data.cpu().numpy()
+            embedd, seq_lengths.data.cpu().numpy(),batch_first=True
         )
 
         # to compact weights again call flatten paramters
