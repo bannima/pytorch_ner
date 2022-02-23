@@ -279,7 +279,7 @@ class Trainer():
 
                 else:
                     #crf predicts loss directly
-                    y_pred, loss = self.model(inputs_tensors,labels_tensors,is_inference)
+                    y_pred, loss = self.model(inputs_tensors,labels_tensors)
 
                 # transform output logits to final NER type predictions, truncate with seq lengths
                 #y_pred, target_label = self.transform_predicts(y_pred, labels_tensors, mask)
