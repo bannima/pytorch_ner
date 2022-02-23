@@ -70,19 +70,18 @@ class LSTMCRF(nn.Module):
         logits = self.fc(self.dropout(output)) # double hidden size when bilstm
         logits = logits.transpose(0,1) # S x B x L -> B x S x L, L means output label size
 
+        loss = None
+        logits = logits.transpose(0, 1)  # crf emission requrires (seq_length, batch_size, num_tags) format
+        mask = mask.transpose(0, 1)  # mask: (seq_length, batch_size)
         # no inference should calc loss
         if not is_inference:
-            logits = logits.transpose(0, 1) #crf emission requrires (seq_length, batch_size, num_tags) format
             labels = labels.transpose(0, 1)  # labels: BxS -> SxB
-            mask = mask.transpose(0,1) # mask: (seq_length, batch_size)
-
             log_likelihood = self.crf(logits,labels,mask) #crf output the log likelihood
             loss = -1 * log_likelihood
-            predictions = self.crf.decode(logits,mask)
-            return loss, predictions
-        else:
-            predictions = self.crf.decode(logits,mask)
-            return predictions
+
+        predictions = self.crf.decode(logits,mask) # batch_size x seq_size
+        return predictions,loss
+
 
 
 
