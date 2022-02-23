@@ -3,8 +3,9 @@
 
 ### Read the Docs
 
-### Architecture
+[pytorch_ner's document](https://pytorch-ner.readthedocs.io/en/latest/)
 
+### Architecture
 ```
 ├── dataset # ner dataset
 ├── docs # rst docs
@@ -47,8 +48,6 @@
 │       └── bert-base-chinese
 ├── test 
 ```
-
-[pytorch_ner's document]()
 
 ### First Experiment
 ```angular2html
