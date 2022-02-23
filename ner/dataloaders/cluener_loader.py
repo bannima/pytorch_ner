@@ -209,8 +209,9 @@ class CLUENERDataloader(BaseLoader):
 
         #bert based models, should use tokenizer
         else:
-            bert_inputs = convert_to_bert_batch_data(inputs, tokenizer, max_length)
-            return bert_inputs,label_tensor if labels else bert_inputs,None
+            #cluener for token classification should remove [CLS],[SEP] in the preprocess precess
+            bert_inputs = convert_to_bert_batch_data(inputs, tokenizer, max_length,add_special_tokens=False)
+            return (bert_inputs,label_tensor) if labels else (bert_inputs,None)
 
     def vector_to_raw(self,labels):
         return ['|'.join([self.idx2label[l] for l in label]) for label in labels]
