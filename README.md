@@ -5,50 +5,6 @@
 
 [pytorch_ner's document](https://pytorch-ner.readthedocs.io/en/latest/)
 
-### Architecture
-```
-├── dataset # ner dataset
-├── docs # rst docs
-├── examples # speicific experiments
-│   ├── cluener_bert_crf
-│   ├── cluener_bert_softmax
-│   ├── cluener_lstm_crf
-│   └── cluener_lstm_softmax # cluener + lstm_softmax
-│       ├── __init__.py
-│       ├── cluener_lstmsoftmax_exp.py # experiment start
-│       └── results
-│           ├── Exp_LR0.002_Batch32_LossSeqWiseCrossEntropyLoss
-│           │   ├── Cluener_LstmSoftmax_Experiment_20220223_1338.png
-│           │   ├── Epoch_Statstics_Time20220223_1338.csv
-│           │   └── predicts
-│           └── cluener_bioes.mlb # cluener multi label binarizer, encoded with bioes 
-├── log
-├── ner # source code
-│   ├── callbacks
-│   ├── config.py 
-│   ├── dataloaders 
-│   │   ├── base_loader.py
-│   │   └── cluener_loader.py
-│   ├── models
-│   │   ├── __init__.py
-│   │   ├── modeling_bert_crf.py
-│   │   ├── modeling_bert_softmax.py
-│   │   ├── modeling_idcnn_softmax.py
-│   │   ├── modeling_lstm_crf.py
-│   │   └── modeling_lstm_softmax.py
-│   ├── modules
-│   │   ├── __init__.py
-│   │   ├── analyzer.py
-│   │   ├── eval_metrics.py
-│   │   ├── ner_loss.py
-│   │   ├── trainer.py
-│   │   ├── utils.py
-│   │   └── visualizer.py
-│   └── pretrain_models
-│       └── bert-base-chinese
-├── test 
-```
-
 ### First Experiment
 ```angular2html
 # fit the lstm_softmax with cluener dataset
@@ -94,6 +50,50 @@
 ### Experiment Results
 
 
+
+### Architecture
+```
+├── dataset # ner dataset
+├── docs # rst docs
+├── examples # speicific experiments
+│   ├── cluener_bert_crf
+│   ├── cluener_bert_softmax
+│   ├── cluener_lstm_crf
+│   └── cluener_lstm_softmax # cluener + lstm_softmax
+│       ├── __init__.py
+│       ├── cluener_lstmsoftmax_exp.py # experiment start
+│       └── results
+│           ├── Exp_LR0.002_Batch32_LossSeqWiseCrossEntropyLoss
+│           │   ├── Cluener_LstmSoftmax_Experiment_20220223_1338.png
+│           │   ├── Epoch_Statstics_Time20220223_1338.csv
+│           │   └── predicts
+│           └── cluener_bioes.mlb # cluener multi label binarizer, encoded with bioes 
+├── log
+├── ner # source code
+│   ├── callbacks
+│   ├── config.py 
+│   ├── dataloaders 
+│   │   ├── base_loader.py
+│   │   └── cluener_loader.py
+│   ├── models
+│   │   ├── __init__.py
+│   │   ├── modeling_bert_crf.py
+│   │   ├── modeling_bert_softmax.py
+│   │   ├── modeling_idcnn_softmax.py
+│   │   ├── modeling_lstm_crf.py
+│   │   └── modeling_lstm_softmax.py
+│   ├── modules
+│   │   ├── __init__.py
+│   │   ├── analyzer.py
+│   │   ├── eval_metrics.py
+│   │   ├── ner_loss.py
+│   │   ├── trainer.py
+│   │   ├── utils.py
+│   │   └── visualizer.py
+│   └── pretrain_models
+│       └── bert-base-chinese
+├── test 
+```
 
 ### References
 
