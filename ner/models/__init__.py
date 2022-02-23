@@ -11,6 +11,7 @@
 from ner.models.lstm_crf.modeling_lstm_crf import LSTMCRF
 from ner.models.lstm_softmax.modeling_lstm_softmax import LSTMSoftamx
 from ner.models.bert_softmax.modeling_bert_softmax import BERTSoftmax
+from ner.models.bert_crf.modeling_bert_crf import BERTCRF
 
 __registerd_models = {
     'LSTMSoftmax':{
@@ -24,6 +25,10 @@ __registerd_models = {
     'BERTSoftmax':{
         'cls':BERTSoftmax,
         'intro':"Bert+Softmax"
+    },
+    'BERTCRF':{
+        'cls':BERTCRF,
+        'intro':"Bert+CRF"
     }
 }
 

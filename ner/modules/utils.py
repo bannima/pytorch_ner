@@ -96,9 +96,12 @@ def convert_to_bert_batch_data(data, tokenizer, max_length,add_special_tokens=Fa
     for row in data:
         encoded_dict = tokenizer.encode_plus(
             row, max_length = max_length,pad_to_max_length=True,\
-            return_attention_mask=True,return_tensors='pt',truncation=True,
+            return_attention_mask=True,return_tensors='pt',truncation=True, \
             # key parameters to avoid [CLS],[SEP].etc special token for token-wise classification problem
-            add_special_tokens=add_special_tokens )
+            add_special_tokens=add_special_tokens,\
+            #padding to max length for crf case
+            padding='max_length' #
+        )
         input_ids.append(encoded_dict['input_ids'])
         attention_masks.append(encoded_dict['attention_mask'])
 
