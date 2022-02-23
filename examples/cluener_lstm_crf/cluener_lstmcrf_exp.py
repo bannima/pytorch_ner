@@ -44,8 +44,9 @@ def cluener_lstm_crf_exp(hypers):
 
 if __name__ == '__main__':
     hypers = parse_parmas()
-    hypers.lr = 0.01
+    hypers.lr = 0.015
     cluener_lstm_crf_exp(hypers)
+
 
 
 
