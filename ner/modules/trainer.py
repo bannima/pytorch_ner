@@ -106,7 +106,6 @@ class Trainer():
         '''
         # list to store a number of statistics
         epoch_stats = []
-
         # total_steps
         total_steps = len(self.train_loader) * self.hypers.epoch
 
@@ -116,7 +115,6 @@ class Trainer():
             num_warmup_steps=0,
             num_training_steps=total_steps
         )
-
         total_t0 = time.time()
 
         for epoch in tqdm(range(1, self.hypers.epoch + 1),
@@ -137,9 +135,7 @@ class Trainer():
             t0 = time.time()
             # eval mode
             self.model.eval()
-
             epoch_eval_loss, eval_metrics = self.valid(epoch, save_preds=self.hypers.save_val_preds)
-
             logger.info("# Valid loss for epoch {} is {} ".format(epoch, epoch_eval_loss))
             for metric_name in eval_metrics:
                 logger.info(
@@ -219,7 +215,7 @@ class Trainer():
 
             if not self.model.output_loss:
                 outputs = self.model(inputs_tensors, labels_tensors)
-                batch_loss = self.calc_loss(outputs, labels_tensors,mask)
+                batch_loss = self.calc_loss(outputs, labels_tensors, mask)
 
             #crf predict loss directly
             else:
@@ -365,7 +361,7 @@ class Trainer():
         # labels = labels.view(-1,1) #tranform [batch_size] to [batch_size X 1]
         # labels = labels.to(torch.float32)
         #mask = torch.where(labels>=0,1,0)
-        seq_lengths = torch.sum(mask,dim=1)
+        seq_lengths = torch.sum(mask, dim=1)
         batch_loss = self.criterion(outputs, labels, seq_lengths)
         return batch_loss
 

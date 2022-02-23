@@ -86,19 +86,25 @@ def get_label_binarizer(lb_path,labels=None):
     return label_binarizer
 
 
-def convert_to_bert_batch_data(data, tokenizer, max_length):
+def convert_to_bert_batch_data(data, tokenizer, max_length,add_special_tokens=False):
     '''convert raw input and labels to bert dataset'''
     input_ids = []
     attention_masks = []
     token_type_ids = []
+    word_ids = []
 
     for row in data:
         encoded_dict = tokenizer.encode_plus(
-            row,max_length = max_length,pad_to_max_length=True,\
-            return_attention_mask=True,return_tensors='pt',truncation=True
-        )
+            row, max_length = max_length,pad_to_max_length=True,\
+            return_attention_mask=True,return_tensors='pt',truncation=True,
+            # key parameters to avoid [CLS],[SEP].etc special token for token-wise classification problem
+            add_special_tokens=add_special_tokens )
         input_ids.append(encoded_dict['input_ids'])
         attention_masks.append(encoded_dict['attention_mask'])
+
+        # word ids indicates the true raw word idx, where the [CLS],[SEP] and padding idx are None,replace None with 0 and no None as 1
+        #word_ids.append(torch.Tensor([0 if v is None else 1 for v in encoded_dict.word_ids()]).unsqueeze(0))
+
         # bert-type model has token_type_ids
         try:
             token_type_ids.append(encoded_dict['token_type_ids'])
@@ -107,22 +113,11 @@ def convert_to_bert_batch_data(data, tokenizer, max_length):
     #convert list to tensor
     input_ids = torch.cat(input_ids,dim=0)
     attention_masks = torch.cat(attention_masks,dim=0)
+    #word_ids = torch.cat(word_ids,dim=0)
 
     if len(token_type_ids)!=0:
         token_type_ids = torch.cat(token_type_ids,dim=0)
-        return (input_ids,attention_masks,token_type_ids)
+        return input_ids,attention_masks,token_type_ids
     else:
-        return (input_ids,attention_masks)
-
-
-
-
-
-
-
-
-
-
-
-
+        return input_ids,attention_masks
 

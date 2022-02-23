@@ -11,7 +11,7 @@
 import os
 import torch
 from transformers import BertModel,BertTokenizer
-from transformers import RobertaModel,RobertaTokenizer
+from transformers import RobertaModel,RobertaTokenizer,AutoTokenizer
 
 pretrian_model_path = os.path.dirname(__file__)
 
@@ -50,7 +50,7 @@ def create_pretrained_tokenizer(model_type):
     if model_type not in __pretrained_models:
         raise ValueError("Not registered pretrained tokenizer type {}, must in {}".format(model_type,list(__pretrained_models.keys())))
     model_path = os.path.join(pretrian_model_path,__pretrained_models[model_type]['path'])
-    tokenizer = __pretrained_models[model_type]['tokenizer'].from_pretrained(model_path)
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
     return tokenizer
 
 

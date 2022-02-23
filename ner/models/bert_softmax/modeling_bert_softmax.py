@@ -36,7 +36,12 @@ class BERTSoftmax(nn.Module):
         self.bert = create_pretrained_model(model_type=pretrain_model_type)
         self.fc = nn.Linear(768,output_size)
 
-    def forward(self,*inputs):
-        bert_output = self.bert(*inputs)[0]
-        return self.fc(bert_output)
+    def forward(self,inputs,labels):
+        bert_output = self.bert(*inputs)[0] # batch_size x seq_len x hidden_size(768)
+
+        logits = self.fc(bert_output) # batch_size x seq_len x output_size
+
+        return logits
+
+
 
