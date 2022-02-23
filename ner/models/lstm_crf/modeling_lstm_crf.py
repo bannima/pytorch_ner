@@ -46,10 +46,14 @@ class LSTMCRF(nn.Module):
                              batch_size, self.hidden_size)
         return hidden
 
-    def forward(self,seq_tensor,seq_lengths,labels,is_inference=False):
-        # seq_tensor,seq_lengths = input # seq_tensor = B x S
+    def forward(self,inputs, labels,is_inference=False):
+        seq_tensor,mask = inputs # seq_tensor = B x S
         seq_tensor = seq_tensor.t()  # seq_tensor = S x B
         batch_size = seq_tensor.size(1)
+
+        # get seq_lengths from mask
+        seq_lengths = torch.sum(mask, dim=1)
+        seq_lengths = seq_lengths.t()
 
         hidden = self._init_hidden(batch_size)
         cell = self._init_hidden(batch_size)
@@ -57,29 +61,20 @@ class LSTMCRF(nn.Module):
 
         # pack them up nicely
         lstm_input = pack_padded_sequence(
-            embedd, seq_lengths.data.cpu().numpy(),batch_first=True
+            embedd, seq_lengths.data.cpu().numpy()
         )
-
         # to compact weights again call flatten paramters
         output, (final_hidden_state, final_cell_state) = self.lstm(lstm_input, (hidden, cell))
         output, length = pad_packed_sequence(output)  # output = S x B x E
 
-        logits = self.dropout(output.view(-1, self.hidden_size * (int(self.bidirectional) + 1)))
+        logits = self.fc(self.dropout(output)) # double hidden size when bilstm
+        logits = logits.transpose(0,1) # S x B x L -> B x S x L, L means output label size
 
-        logits = self.fc(logits) # double hidden size when bilstm
-
-        logits = logits.view(-1, batch_size, self.output_size)  # S x B x L, L means output label size
-
-
-        # # note that labels less than 0 are meaningless label
-        # mask = torch.where(labels >= 0, 1, 0).type(torch.uint8)
-
-        # note that seq tensor index less and equal than 0 are meaningless word idx
-        mask = torch.where(seq_tensor>0,1,0).type(torch.uint8)
-
-        #train should calc loss
+        # no inference should calc loss
         if not is_inference:
+            logits = logits.transpose(0, 1) #crf emission requrires (seq_length, batch_size, num_tags) format
             labels = labels.transpose(0, 1)  # labels: BxS -> SxB
+            mask = mask.transpose(0,1) # mask: (seq_length, batch_size)
 
             log_likelihood = self.crf(logits,labels,mask) #crf output the log likelihood
             loss = -1 * log_likelihood
