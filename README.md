@@ -1,10 +1,13 @@
 ## pytorch_ner
 `classic NER model implementations based on Pytorch`
 
+### Read the Docs
+[pytorch_ner's document]()
 
 ### First Experiment
 ```angular2html
-#fit the lstm_softmax with cluener dataset
+# fit the lstm_softmax with cluener dataset
+
 >>> python examples/cluener_lstm_softmax/cluener_lstmsoftmax_exp.py
 ```
 
@@ -24,20 +27,20 @@
 
 - [Bert + Span]()
 
-- [Luke]()
+- [MRC]()
 
 ### NER Datasets
-1. Chinese 
- - [CLUENER](https://www.cluebenchmarks.com/introduce.html)
+1. zh 
+   - [CLUENER](https://www.cluebenchmarks.com/introduce.html)
 
- - []()
+   - []()
 
- - []()
+   - []()
 
-2. English
- - []()
+2. en
+   - []()
 
- - []()
+   - []()
 
 ### References
 
