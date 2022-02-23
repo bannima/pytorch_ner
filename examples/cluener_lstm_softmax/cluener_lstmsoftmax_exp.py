@@ -20,18 +20,18 @@ def cluener_lstm_softmax_exp(hypers):
     result_path = os.path.join(os.path.dirname(__file__),'results')
 
     # 1.load cluener dataset
-    cluener_loader = create_dataloader('CLUENER',batch_size=hypers.batch_size,label_type=label_type,result_path=result_path)
+    cluener = create_dataloader('CLUENER',batch_size=hypers.batch_size,label_type=label_type,result_path=result_path)
 
     # 2.initialize the lstm_softmax model
-    lstm_softmax = create_ner_model(ner_model='LSTMSoftmax',vocab_size=cluener_loader.vocab_size,\
-                        output_size=cluener_loader.label_size,word_vectors=None,hidden_size=100,bidirectional=True)
+    lstm_softmax = create_ner_model(ner_model='LSTMSoftmax',vocab_size=cluener.vocab_size,\
+                        output_size=cluener.label_size,word_vectors=None,hidden_size=100,bidirectional=True)
 
     # 3.prepare the trainer
     trainer = Trainer(
         model = lstm_softmax,
-        dataloaders = (cluener_loader.train_loader,cluener_loader.valid_loader,cluener_loader.test_loader),
-        raw_to_vector=cluener_loader.raw_to_vector,
-        vector_to_raw=cluener_loader.vector_to_raw,
+        dataloaders = (cluener.train_loader,cluener.valid_loader,cluener.test_loader),
+        raw_to_vector=cluener.raw_to_vector,
+        vector_to_raw=cluener.vector_to_raw,
         result_path = result_path,
         hypers = hypers
     )
